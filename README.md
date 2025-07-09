@@ -1,5 +1,5 @@
 # Social-Blacklist
-A reddit mod tool to automatically remove posts by users who have social links belonging to certain domains. This would be helpful to prevent spamming by users whose goal is to post in multiple communities to visitors to their social-links for commercial gain(like platforms for selling content, or get PPV etc.). After installing the app, go to App Settings and configure the domains, and removal message as per your requirement. To know if the app is removing the posts accordingly, you can check your mod-log for actions made by /u/social-blacklist.
+A reddit mod tool to automatically remove posts by users who have social links belonging to certain domains. This would be helpful to communities where spamming is common by users with goal to attract to visitors to their social-links for commercial gain(like platforms for selling content, or get PPV etc.). After installing the app, go to App Settings and configure the domains and removal message as per your requirement. To know if the app is removing the posts accordingly, you can check your mod-log for actions made by /u/social-blacklist.
 
 ### Installing the app:
 Moderators can install the app to their subreddit by going to [https://developers.reddit.com/apps/social-blacklist](https://developers.reddit.com/apps/social-blacklist)
