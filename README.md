@@ -8,6 +8,7 @@ Moderators can install the app to their subreddit by going to [https://developer
 The settings page provides the following settings:
   1) Blacklisted-Domains: A list of domains to blacklist (For example: instagram.com, youtube.com)
   2) Removal message: Text that would be sent to the user on removal of the post.
+  3) Flag to enable/disable mod-mail notification on removal.
 
 You can access these settings by going to https://developers.reddit.com/r/[subreddit-name]/apps/social-blacklist
 
@@ -16,3 +17,6 @@ You can access these settings by going to https://developers.reddit.com/r/[subre
     * Initial version with domains input in settings, and trigger on PostSubmit to read social links of user and remove on matching the blacklisted domains.
 * 0.0.5
     * Update readme.
+* 0.0.6
+    1. Distinguish comment as 'MOD' and sticky.
+    2. Add settings input for for enabling/disabling mod-mail notification on post removal.
