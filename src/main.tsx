@@ -13,7 +13,8 @@ enum removalReasons {
   blacklistedDomainInPostLink = "BLacklisted domain found in post link",
   blacklistedDomainInPostBody = "BLacklisted domain found in post body/content",
   blacklistedDomainInRecentComments= "Blacklisted domain found in user's Recent comments",
-  NSFWProfile= "NSFW Profile",
+  blacklistedDomainInComment = "Blacklisted domain found in user's comment",
+  NSFWProfile = "NSFW Profile",
 }
 
 export interface RedditAPIPlugins {
@@ -75,7 +76,7 @@ Devvit.addSettings([
     type: 'string',
     name: 'removal-message',
     label: 'Message to user on removal of the post:',
-    defaultValue: "Your post has been removed from this sub based on your profile information or post content. Please review rules of the sub for further information on what is allowed/disallowed on this subreddit.",
+    defaultValue: "Your submission has been removed from this sub based on your profile information or posted content. Please review rules of the sub for further information on what is allowed/disallowed on this subreddit.",
     scope: SettingScope.Installation,
   },
   {
@@ -101,8 +102,15 @@ Devvit.addSettings([
   },
   {
     type: 'boolean',
-    name: 'notifyModeratorsOnPostRemoval',
-    label: 'Notify moderators on post removal through mod-mail.',
+    name: 'removeDomainInComment',
+    label: 'Remove comments containing blacklisted domains.',
+    scope: SettingScope.Installation, 
+    defaultValue: false,
+  },
+  {
+    type: 'boolean',
+    name: 'notifyModeratorsOnRemoval',
+    label: 'Notify moderators on removals through mod-mail.',
     scope: SettingScope.Installation, 
     defaultValue: false
   },
@@ -115,8 +123,8 @@ Devvit.addSettings([
   },
   {
     type: 'boolean',
-    name: 'ignorePostsByModerators',
-    label: 'Ignore posts by moderators of this subreddit.',
+    name: 'ignoreModerators',
+    label: 'Ignore posts and comments by moderators of this subreddit.',
     scope: SettingScope.Installation, 
     defaultValue: true,
   },
@@ -139,38 +147,35 @@ Devvit.addTrigger({
     const removal_message = settings['removal-message'];
     const removeDomainInSocialLinks = settings['removeDomainInSocialLinks'];
     const removeNSFWProfilePosts = settings['removeNSFWProfilePosts'];
-    const notifyModeratorsOnPostRemoval = settings['notifyModeratorsOnPostRemoval'];
+    const notifyModeratorsOnRemoval = settings['notifyModeratorsOnRemoval'];
     const removeDomainInPostLink = settings['removeDomainInPostLink'];
     const removeDomainInPostBody = settings['removeDomainInPostBody'];
-    const ignorePostsByModerators = settings['ignorePostsByModerators'];
+    const ignoreModerators = settings['ignoreModerators'];
     const subredditName = context.subredditName??'';
     var removalReason:removalReasons = removalReasons.none;
+    const author = await context.reddit.getUserById(event.post?.authorId??"defaultUsernameXXX");
+    var authorUsername = author?.username??"nobody";
+    const subreddit = await context.reddit.getCurrentSubreddit();
 
-    if( blacklisted_list && typeof blacklisted_list== "string") {
+    if( ignoreModerators ) {
+      const moderators = await subreddit.getModerators().all();
+      for (const mod of  moderators) {
+        if (mod.username === authorUsername) {
+          return;//Do not action anything if the user is a moderator.
+        }
+      }
+    }
+
+    if( blacklisted_list && typeof blacklisted_list== "string" && author ) {
 
       const blacklisted_domains =blacklisted_list
       .split(',')
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean);
+  
+      if( event.post!= undefined ) {
 
-      // Get the post author
-      var authorId = event.post?.authorId;
-      if( typeof authorId == "string" && event.post!= undefined ) {
-        const author = await context.reddit.getUserById(authorId);
-        var authorUsername = author?.username??"nobody";
-
-        const subreddit = await context.reddit.getCurrentSubreddit();
-        const moderators = await subreddit.getModerators().all();
-
-        if( ignorePostsByModerators ) {
-          for (const mod of  moderators) {
-            if (mod.username === authorUsername) {
-              return;//Do not action anything if the user is a moderator.
-            }
-          }
-        }
-
-        const socialLinks = await author?.getSocialLinks();
+        const socialLinks = await author.getSocialLinks();
 
         // Check if any social link matches a blacklisted domain
         const blacklistedDomainFoundInSocialLinks = socialLinks?.some(link =>
@@ -199,7 +204,8 @@ Devvit.addTrigger({
         {
           const redditComment = await context.reddit.submitComment({
             id: event.post.id,
-            text: `${removal_message}`
+            text: `${removal_message}`,
+            
           });
 
           await redditComment.distinguish(true);
@@ -207,19 +213,70 @@ Devvit.addTrigger({
           await context.reddit.sendPrivateMessage({
             to: authorUsername,
             subject: `Your post '${event.post.title}' has been removed from ${subredditName}`,
-            text: `${removal_message} - post link: ${event.post.permalink}`,
+            text: `${removal_message} \n\n Post link: ${event.post.permalink}`,
           });
 
           const post =await context.reddit.getPostById(event.post.id);
           await post.remove();
 
-          if( notifyModeratorsOnPostRemoval ) {
+          if( notifyModeratorsOnRemoval ) {
             const conversationId = await context.reddit.modMail.createModNotification({  
               subject: 'post removal from Social-Blacklist',
               bodyMarkdown: 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com'+author?.permalink+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason,
               subredditId: context.subredditId,
             });
           }
+        }
+      }
+    }
+  },
+});
+
+
+Devvit.addTrigger({
+  event: 'CommentCreate',
+  onEvent: async (event, context) => {
+    const blacklisted_domains_list = await context.settings.get('blacklisted-domains');
+    const ignoreModerators = await context.settings.get('ignoreModerators');
+    const notifyModeratorsOnRemoval = await context.settings.get('notifyModeratorsOnRemoval');
+    const removeDomainInComment = await context.settings.get('removeDomainInComment');
+    const removal_message = await context.settings.get('removal-message');
+    const subreddit = await context.reddit.getCurrentSubreddit();    
+    const authorUsername = event.author?.name??"defaultUserName";
+
+    if( removeDomainInComment && typeof blacklisted_domains_list == "string" ) {
+
+      if( ignoreModerators ) {
+        const moderators = await subreddit.getModerators().all();
+        for (const mod of  moderators) {
+          if (mod.username === authorUsername) {
+            return;//Do not action anything if the user is a moderator.
+          }
+        }
+      }
+
+      const blacklisted_domains = blacklisted_domains_list
+      .split(',')
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean);
+
+      const commentBody = event.comment?.body ?? '';
+      const foundDomain = blacklisted_domains.find(domain => commentBody.toLowerCase().includes(domain));
+      if ( foundDomain && event.comment?.id ) {
+        await context.reddit.remove(event.comment.id, false);//TODO: Make spam=true later if needed.
+
+        await context.reddit.sendPrivateMessage({
+            to: authorUsername,
+            subject: `Your comment has been removed from /r/${subreddit.name}`,
+            text: `${removal_message} \n\n Comment link: ${event.comment?.permalink}`,
+        });
+
+        if( notifyModeratorsOnRemoval ) {
+          const conversationId = await context.reddit.modMail.createModNotification({  
+            subject: 'comment removal from Social-Blacklist',
+            bodyMarkdown: 'A comment has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+ authorUsername+'  \n\n Comment text: '+event.comment?.body+' \n\n Comment link: '+event.comment?.permalink+'  \n\n Removal reason: '+removalReasons.blacklistedDomainInComment,
+            subredditId: context.subredditId,
+          });
         }
       }
     }

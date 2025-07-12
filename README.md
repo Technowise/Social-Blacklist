@@ -4,7 +4,7 @@ A reddit mod tool to automate removal of posts based on the configured blacklist
  * Post Link
  * Post Body
  
- This would be helpful to communities where spamming is common by users/bots with a goal to attract visitors to their sites/pages for commercial gain(like platforms for selling content, or get PPV etc.). After installing the app, go to App Installation Settings and configure the domains and removal message as per your requirement, and the enable/disable flags on what/where to look for these domains for removal. You can also optionally remove all posts by users having NSFW profile. To know if the app is removing the posts accordingly, you can enable mod-mail notification on removal through the settings OR check your mod-log for actions made by /u/social-blacklist.
+ This would be helpful to communities where spamming is common by users/bots with a goal to attract visitors to their sites/pages for commercial gain(like platforms for selling content, or get PPV etc.). After installing the app, go to App Installation Settings and configure the domains and removal message as per your requirement, and the enable/disable flags on what/where to look for these domains for removal. This can optionally remove all posts by users having NSFW profile. To know if the app is removing the posts accordingly, you can enable mod-mail notification on removal through the settings OR review your mod-log for actions made by /u/social-blacklist.
 
 #### What can this tool do that Automoderator can't?
 While Automoderator can also do most of the these things, Automoderator rules can't:
@@ -22,9 +22,10 @@ The settings page provides the following settings:
   3) Flag to remove posts containing blacklisted domains found in `Social Links` section of user's profile.
   4) Flag to remove posts containing blacklisted domains found in post link.
   5) Flag to remove posts containing blacklisted domains found in post body/content.
-  6) Flag to remove posts made by users having NSFW profiles.
-  7) Flag to send mod-mail notification on removal.
-  8) Flag to ignore posts by moderators of the subreddit.
+  6) Flag to remove comments containing blacklisted domains.
+  7) Flag to remove posts made by users having NSFW profiles.
+  8) Flag to send mod-mail notification on removal.
+  9) Flag to ignore posts by moderators of the subreddit.
 
 ## Changelog
 * 0.0.2
@@ -42,3 +43,5 @@ The settings page provides the following settings:
     5. Update contents of mod-mail notification to contain author link
 * 0.0.8
     * Update Readme file.
+* 0.0.9
+    * Add option to remove comments containing blacklisted domain.

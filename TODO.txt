@@ -1,7 +1,7 @@
 Keep count of removals in redis, then ban user after X number of removals.
-Add flag to remove comments that contain blacklisted domains.
+Add flag to remove comments that contain blacklisted domains.  - In progress.
 Add flag in settings to remove posts if the user has stickied post that contain blacklisted domains.
 Add flag in settings to remove posts if user has blacklisted domainsin their recent comments.
-
+Add flag to optionally run scheduled job to check the 'New' feed, and scan through the user's links.
 Add flag in settings to remove posts from NSFW profiles. - Done.
 Add flag to send mod-mail on removal of posts. - Done
