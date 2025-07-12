@@ -221,7 +221,6 @@ Devvit.addTrigger({
             });
           }
         }
-        //TODO: Keep count of removals in redis, then ban user after X number of removals.
       }
     }
   },
