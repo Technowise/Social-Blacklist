@@ -53,20 +53,20 @@ async function addScheduledJob(context:TriggerContext) {
 Devvit.addSchedulerJob({
   name: 'check-feeds',  
   onRun: async(event, context) => {
-    const subreddit = await context.reddit.getCurrentSubreddit();
-    const posts = await context.reddit
-      .getNewPosts({
-        subredditName: subreddit.name,
-        limit: 30,
-        pageSize: 1,
-      })
-      .all();
 
     const settings = await context.settings.getAll();
     const blacklisted_list = settings['blacklisted-domains']??'';
     const removeDomainInSocialLinks = settings['removeDomainInSocialLinks'];
 
     if( removeDomainInSocialLinks && typeof blacklisted_list== "string" ){
+      const subreddit = await context.reddit.getCurrentSubreddit();
+      const posts = await context.reddit
+        .getNewPosts({
+          subredditName: subreddit.name,
+          limit: 30,
+          pageSize: 1,
+        })
+        .all();      
 
       for( var i=0; i< posts.length; i++ ) {
         const author = await context.reddit.getUserByUsername(posts[i].authorName);        
