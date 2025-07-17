@@ -3,8 +3,11 @@ A reddit mod tool to automate removal of posts based on the configured blacklist
  * `Social Links` section of their profile
  * Post Link
  * Post Body
+ * Post Comment
  
  This would be helpful to communities where spamming is common by users/bots with a goal to attract visitors to their sites/pages for commercial gain(like platforms for selling content, or get PPV etc.). After installing the app, go to App Installation Settings and configure the domains and removal message as per your requirement, and the enable/disable flags on what/where to look for these domains for removal. This can optionally remove all posts by users having NSFW profile. To know if the app is removing the posts accordingly, you can enable mod-mail notification on removal through the settings OR review your mod-log for actions made by /u/social-blacklist.
+
+![Screenshot of settings available](https://i.redd.it/l2t7vak8sddf1.png)
 
 #### What can this tool do that Automoderator can't?
 While Automoderator can also do most of the these things, Automoderator rules can't:
@@ -45,3 +48,5 @@ The settings page provides the following settings:
     * Update Readme file.
 * 0.0.9
     * Add option to remove comments containing blacklisted domain.
+* 0.0.11
+    * Add scheduled job to check new posts every 10 mins (to catch users who may update profile after making posts)

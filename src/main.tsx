@@ -1,6 +1,7 @@
-import { Devvit, SettingScope} from '@devvit/public-api';
+import { Devvit, JobContext, Post, SettingScope, TriggerContext} from '@devvit/public-api';
 import * as protos from "@devvit/protos";
 import { UserAboutResponse } from "@devvit/protos/types/devvit/plugin/redditapi/users/users_msg.js";
+import { PostV2 } from '@devvit/protos/types/devvit/reddit/v2alpha/postv2.js';
 
 Devvit.configure({redditAPI: true, 
                   redis: true,
@@ -16,6 +17,78 @@ enum removalReasons {
   blacklistedDomainInComment = "Blacklisted domain found in user's comment",
   NSFWProfile = "NSFW Profile",
 }
+
+Devvit.addTrigger({
+  event:'AppInstall',
+  onEvent: async (event, context) => {
+    await addScheduledJob(context);
+  },
+});
+
+Devvit.addTrigger({
+  event:'AppUpgrade',
+  onEvent: async (event, context) => {
+    await addScheduledJob(context);
+  },
+});
+
+async function addScheduledJob(context:TriggerContext) {  
+  const oldJobId = (await context.redis.get('ScheduledJobId')) || '0';
+  const scheduledJobs = await context.scheduler.listJobs();
+
+  for( const key in scheduledJobs ){
+    if ( scheduledJobs[key].id == oldJobId) {
+      await context.scheduler.cancelJob(oldJobId);
+    }
+  }
+  console.log("Adding a new scheduled job for scheduled feed checking.");
+  const jobId = await context.scheduler.runJob({
+  name: 'check-feeds',
+  //cron: '* * * * *', //Runs every minute - Only use this for testing.
+  cron: '*/10 * * * *', //Runs 10 mins once.
+  });
+  await context.redis.set('ScheduledJobId', jobId);
+}
+
+Devvit.addSchedulerJob({
+  name: 'check-feeds',  
+  onRun: async(event, context) => {
+    const subreddit = await context.reddit.getCurrentSubreddit();
+    const posts = await context.reddit
+      .getNewPosts({
+        subredditName: subreddit.name,
+        limit: 30,
+        pageSize: 1,
+      })
+      .all();
+
+    const settings = await context.settings.getAll();
+    const blacklisted_list = settings['blacklisted-domains']??'';
+    const removeDomainInSocialLinks = settings['removeDomainInSocialLinks'];
+
+    if( removeDomainInSocialLinks && typeof blacklisted_list== "string" ){
+
+      for( var i=0; i< posts.length; i++ ) {
+        const author = await context.reddit.getUserByUsername(posts[i].authorName);        
+        if( author ) {
+          const socialLinks = await author.getSocialLinks();
+          const blacklisted_domains = blacklisted_list
+          .split(',')
+          .map((d) => d.trim().toLowerCase())
+          .filter(Boolean);
+          // Check if any social link matches a blacklisted domain
+          const blacklistedDomainFoundInSocialLinks = socialLinks?.some(link =>
+            blacklisted_domains.some(domain => link.outboundUrl.toLowerCase().includes(domain))
+          );
+
+          if( blacklistedDomainFoundInSocialLinks ) {
+            await removePost(posts[i], removalReasons.blacklistedDomainInSocialLinks, context);
+          }
+        }
+      }
+    }
+  },
+});
 
 export interface RedditAPIPlugins {
     NewModmail: protos.NewModmail;
@@ -144,27 +217,13 @@ Devvit.addTrigger({
 
     const settings = await context.settings.getAll();
     const blacklisted_list = settings['blacklisted-domains'];
-    const removal_message = settings['removal-message'];
     const removeDomainInSocialLinks = settings['removeDomainInSocialLinks'];
     const removeNSFWProfilePosts = settings['removeNSFWProfilePosts'];
-    const notifyModeratorsOnRemoval = settings['notifyModeratorsOnRemoval'];
     const removeDomainInPostLink = settings['removeDomainInPostLink'];
     const removeDomainInPostBody = settings['removeDomainInPostBody'];
-    const ignoreModerators = settings['ignoreModerators'];
-    const subredditName = context.subredditName??'';
     var removalReason:removalReasons = removalReasons.none;
     const author = await context.reddit.getUserById(event.post?.authorId??"defaultUsernameXXX");
     var authorUsername = author?.username??"nobody";
-    const subreddit = await context.reddit.getCurrentSubreddit();
-
-    if( ignoreModerators ) {
-      const moderators = await subreddit.getModerators().all();
-      for (const mod of  moderators) {
-        if (mod.username === authorUsername) {
-          return;//Do not action anything if the user is a moderator.
-        }
-      }
-    }
 
     if( blacklisted_list && typeof blacklisted_list== "string" && author ) {
 
@@ -200,38 +259,55 @@ Devvit.addTrigger({
           removalReason = removalReasons.NSFWProfile;
         }
 
-        if( removalReason != removalReasons.none )
-        {
-          const redditComment = await context.reddit.submitComment({
-            id: event.post.id,
-            text: `${removal_message}`,
-            
-          });
-
-          await redditComment.distinguish(true);
-
-          await context.reddit.sendPrivateMessage({
-            to: authorUsername,
-            subject: `Your post '${event.post.title}' has been removed from ${subredditName}`,
-            text: `${removal_message} \n\n Post link: ${event.post.permalink}`,
-          });
-
-          const post =await context.reddit.getPostById(event.post.id);
-          await post.remove();
-
-          if( notifyModeratorsOnRemoval ) {
-            const conversationId = await context.reddit.modMail.createModNotification({  
-              subject: 'post removal from Social-Blacklist',
-              bodyMarkdown: 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com'+author?.permalink+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason,
-              subredditId: context.subredditId,
-            });
-          }
+        if( removalReason != removalReasons.none ) {
+          await removePost(event.post, removalReason, context);
         }
       }
     }
   },
 });
 
+async function removePost(posToRemove:PostV2 | Post,  removalReason:removalReasons, context: TriggerContext | JobContext) {
+  const settings = await context.settings.getAll();
+  const removal_message = settings['removal-message'];  
+  const notifyModeratorsOnRemoval = settings['notifyModeratorsOnRemoval'];
+  const author = await context.reddit.getUserById(posToRemove.authorId??"defaultUsernameXXX");
+  const ignoreModerators = settings['ignoreModerators'];
+  const subreddit = await context.reddit.getCurrentSubreddit();
+
+  if( ignoreModerators ) {
+    const moderators = await subreddit.getModerators().all();
+    for (const mod of  moderators) {
+      if (mod.username === author?.username) {
+        return;//Do not action anything if the user is a moderator.
+      }
+    }
+  }
+
+  const redditComment = await context.reddit.submitComment({
+    id: posToRemove.id,
+    text: `${removal_message}`,
+  });
+
+  await redditComment.distinguish(true);
+
+  await context.reddit.sendPrivateMessage({
+    to: author?.username??"defaultUsernameXXX",
+    subject: `Your post '${posToRemove.title}' has been removed from ${context.subredditName}`,
+    text: `${removal_message} \n\n Post link: ${posToRemove.permalink}`,
+  });
+
+  const post =await context.reddit.getPostById(posToRemove.id);
+  await post.remove();
+
+  if( notifyModeratorsOnRemoval ) {
+    const conversationId = await context.reddit.modMail.createModNotification({  
+      subject: 'post removal from Social-Blacklist',
+      bodyMarkdown: 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+author?.username+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason,
+      subredditId: context.subredditId,
+    });
+  }
+}
 
 Devvit.addTrigger({
   event: 'CommentCreate',
