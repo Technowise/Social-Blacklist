@@ -50,3 +50,5 @@ The settings page provides the following settings:
     * Add option to remove comments containing blacklisted domain.
 * 0.0.11
     * Add scheduled job to check new posts every 10 mins (to catch users who may update profile after making posts)
+* 0.0.12
+    * Update scheduled job to check to ignore posts that are approved or already removed.

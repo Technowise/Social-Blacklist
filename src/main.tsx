@@ -66,16 +66,18 @@ Devvit.addSchedulerJob({
           limit: 30,
           pageSize: 1,
         })
-        .all();      
+        .all();
 
-      for( var i=0; i< posts.length; i++ ) {
-        const author = await context.reddit.getUserByUsername(posts[i].authorName);        
-        if( author ) {
-          const socialLinks = await author.getSocialLinks();
-          const blacklisted_domains = blacklisted_list
+      const blacklisted_domains = blacklisted_list
           .split(',')
           .map((d) => d.trim().toLowerCase())
           .filter(Boolean);
+
+      for( var i=0; i< posts.length; i++ ) {
+        const author = await context.reddit.getUserByUsername(posts[i].authorName);        
+        if( author && ! posts[i].isApproved() && ! posts[i].isRemoved()  ) {
+          const socialLinks = await author.getSocialLinks();
+ 
           // Check if any social link matches a blacklisted domain
           const blacklistedDomainFoundInSocialLinks = socialLinks?.some(link =>
             blacklisted_domains.some(domain => link.outboundUrl.toLowerCase().includes(domain))

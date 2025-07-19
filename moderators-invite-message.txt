@@ -1,0 +1,8 @@
+Hi moderators,
+I am a developer of a reddit moderation tool called Social-Blacklist, which helps in automatic removal of posts and comments from users promoting their social links (onlyfans, Fansly etc.) in their profile, or in their posts. This is especially useful for those subreddits where their rules prohibit this. 
+The tool gives you control on what areas to look for the blacklisted domains for removal of posts (Social Links section, post body, post link, or comments).
+
+It can be installed to the subreddit by going here: 
+https://developers.reddit.com/apps/social-blacklist
+
+ If you have any questions, do let me know.
