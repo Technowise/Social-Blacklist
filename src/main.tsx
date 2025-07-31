@@ -1,4 +1,4 @@
-import { Devvit, JobContext, Post, SettingScope, TriggerContext} from '@devvit/public-api';
+import { Devvit, JobContext, Post, SettingScope, TriggerContext, User} from '@devvit/public-api';
 import * as protos from "@devvit/protos";
 import { UserAboutResponse } from "@devvit/protos/types/devvit/plugin/redditapi/users/users_msg.js";
 import { PostV2 } from '@devvit/protos/types/devvit/reddit/v2alpha/postv2.js';
@@ -15,6 +15,7 @@ enum removalReasons {
   blacklistedDomainInPostBody = "Blacklisteddomain found in post body/content",
   blacklistedDomainInRecentComments= "Blacklisted domain found in user's Recent comments",
   blacklistedDomainInComment = "Blacklisted domain found in user's comment",
+  blacklistedDomainInUserStickyPost = "Blacklisted domain found in user's sticky post",
   NSFWProfile = "NSFW Profile",
 }
 
@@ -177,6 +178,13 @@ Devvit.addSettings([
   },
   {
     type: 'boolean',
+    name: 'removeDomainInProfileStickyPosts',
+    label: 'Remove posts containing blacklisted domains in profile sticky posts.',
+    scope: SettingScope.Installation, 
+    defaultValue: false,
+  }, 
+  {
+    type: 'boolean',
     name: 'removeDomainInComment',
     label: 'Remove comments containing blacklisted domains.',
     scope: SettingScope.Installation, 
@@ -223,6 +231,7 @@ Devvit.addTrigger({
     const removeNSFWProfilePosts = settings['removeNSFWProfilePosts'];
     const removeDomainInPostLink = settings['removeDomainInPostLink'];
     const removeDomainInPostBody = settings['removeDomainInPostBody'];
+    const removeDomainInProfileStickyPosts = settings['removeDomainInProfileStickyPosts'];
     var removalReason:removalReasons = removalReasons.none;
     const author = await context.reddit.getUserById(event.post?.authorId??"defaultUsernameXXX");
     var authorUsername = author?.username??"nobody";
@@ -243,8 +252,14 @@ Devvit.addTrigger({
           blacklisted_domains.some(domain => link.outboundUrl.toLowerCase().includes(domain))
         );
 
-        const blacklistedDomainFoundInPostLink = blacklisted_domains.some(domain => event.post?.url.toLowerCase().includes(domain))
-        const blacklistedDomainFoundInPostBody = blacklisted_domains.some(domain => event.post?.selftext.toLowerCase().includes(domain))
+        const blacklistedDomainFoundInPostLink = blacklisted_domains.some(domain => event.post?.url.toLowerCase().includes(domain));
+        const blacklistedDomainFoundInPostBody = blacklisted_domains.some(domain => event.post?.selftext.toLowerCase().includes(domain));
+
+        var blacklistedDomainFoundInProfileStickyPosts = false;
+
+        if( removeDomainInProfileStickyPosts ) {
+          blacklistedDomainFoundInProfileStickyPosts = await findBlacklistedDomainsInStickyPosts(author, blacklisted_domains, context);
+        }
 
         const rawUserData = await getRawUserData(authorUsername, context.debug.metadata);
 
@@ -260,6 +275,9 @@ Devvit.addTrigger({
         else if ( removeNSFWProfilePosts && rawUserData?.data && rawUserData.data.subreddit?.over18) {
           removalReason = removalReasons.NSFWProfile;
         }
+        else if ( blacklistedDomainFoundInProfileStickyPosts ) {
+          removalReason = removalReasons.blacklistedDomainInUserStickyPost;
+        }
 
         if( removalReason != removalReasons.none ) {
           await removePost(event.post, removalReason, context);
@@ -268,6 +286,22 @@ Devvit.addTrigger({
     }
   },
 });
+
+async function findBlacklistedDomainsInStickyPosts(author:User, blacklisted_domains: string[], context: TriggerContext | JobContext) {
+  const posts =  await author.getPosts({ limit: 20, timeframe:"all"}).all();
+  if( posts ) {
+    for( var i=0; i< posts.length; i++ ) {
+      if( posts[i].isStickied()  ) {
+        const blacklistedDomainFoundInPostLink = blacklisted_domains.some(domain => posts[i]?.url.toLowerCase().includes(domain));
+        const blacklistedDomainFoundInPostBody = blacklisted_domains.some(domain => posts[i]?.body??"".toLowerCase().includes(domain));
+        if( blacklistedDomainFoundInPostLink || blacklistedDomainFoundInPostBody ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 async function removePost(posToRemove:PostV2 | Post,  removalReason:removalReasons, context: TriggerContext | JobContext) {
   const settings = await context.settings.getAll();
