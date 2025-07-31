@@ -54,3 +54,5 @@ The settings page provides the following settings:
     * Update scheduled job to check to ignore posts that are approved or already removed.
 * 0.0.13
     * Add option to remove posts containing blacklisted domain in profile sticky posts.
+* 0.0.14
+    * Add check on post object to be valid before calling the remove method(to fix an issue in removing posts that happens intermittently).

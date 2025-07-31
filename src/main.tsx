@@ -320,28 +320,30 @@ async function removePost(posToRemove:PostV2 | Post,  removalReason:removalReaso
     }
   }
 
-  const redditComment = await context.reddit.submitComment({
-    id: posToRemove.id,
-    text: `${removal_message}`,
-  });
+  const post = await context.reddit.getPostById(posToRemove.id);
+  if( post ) {
+    await post.remove();
 
-  await redditComment.distinguish(true);
-
-  await context.reddit.sendPrivateMessage({
-    to: author?.username??"defaultUsernameXXX",
-    subject: `Your post '${posToRemove.title}' has been removed from ${context.subredditName}`,
-    text: `${removal_message} \n\n Post link: ${posToRemove.permalink}`,
-  });
-
-  const post =await context.reddit.getPostById(posToRemove.id);
-  await post.remove();
-
-  if( notifyModeratorsOnRemoval ) {
-    const conversationId = await context.reddit.modMail.createModNotification({  
-      subject: 'post removal from Social-Blacklist',
-      bodyMarkdown: 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+author?.username+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason,
-      subredditId: context.subredditId,
+    const redditComment = await context.reddit.submitComment({
+      id: posToRemove.id,
+      text: `${removal_message}`,
     });
+
+    await redditComment.distinguish(true);
+
+    await context.reddit.sendPrivateMessage({
+      to: author?.username??"defaultUsernameXXX",
+      subject: `Your post '${posToRemove.title}' has been removed from ${context.subredditName}`,
+      text: `${removal_message} \n\n Post link: ${posToRemove.permalink}`,
+    });
+
+    if( notifyModeratorsOnRemoval ) {
+      const conversationId = await context.reddit.modMail.createModNotification({  
+        subject: 'post removal from Social-Blacklist',
+        bodyMarkdown: 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+author?.username+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason,
+        subredditId: context.subredditId,
+      });
+    }
   }
 }
 
