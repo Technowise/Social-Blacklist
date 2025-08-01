@@ -85,7 +85,7 @@ Devvit.addSchedulerJob({
           );
 
           if( blacklistedDomainFoundInSocialLinks ) {
-            await removePost(posts[i], removalReasons.blacklistedDomainInSocialLinks, context);
+            await removePost(posts[i], removalReasons.blacklistedDomainInSocialLinks, context, 6);
           }
         }
       }
@@ -280,7 +280,7 @@ Devvit.addTrigger({
         }
 
         if( removalReason != removalReasons.none ) {
-          await removePost(event.post, removalReason, context);
+          await removePost(event.post, removalReason, context, 6);
         }
       }
     }
@@ -303,11 +303,13 @@ async function findBlacklistedDomainsInStickyPosts(author:User, blacklisted_doma
   return false;
 }
 
-async function removePost(posToRemove:PostV2 | Post,  removalReason:removalReasons, context: TriggerContext | JobContext) {
+async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReasons, context: TriggerContext | JobContext, retries: number) {
+  if (retries <= 0) return;
+
   const settings = await context.settings.getAll();
   const removal_message = settings['removal-message'];  
   const notifyModeratorsOnRemoval = settings['notifyModeratorsOnRemoval'];
-  const author = await context.reddit.getUserById(posToRemove.authorId??"defaultUsernameXXX");
+  const author = await context.reddit.getUserById(postToRemove.authorId??"defaultUsernameXXX");
   const ignoreModerators = settings['ignoreModerators'];
   const subreddit = await context.reddit.getCurrentSubreddit();
 
@@ -320,29 +322,36 @@ async function removePost(posToRemove:PostV2 | Post,  removalReason:removalReaso
     }
   }
 
-  const post = await context.reddit.getPostById(posToRemove.id);
+  const post = await context.reddit.getPostById(postToRemove.id);
   if( post ) {
-    await post.remove();
 
-    const redditComment = await context.reddit.submitComment({
-      id: posToRemove.id,
-      text: `${removal_message}`,
-    });
+    try {
+      await post.remove();
 
-    await redditComment.distinguish(true);
-
-    await context.reddit.sendPrivateMessage({
-      to: author?.username??"defaultUsernameXXX",
-      subject: `Your post '${posToRemove.title}' has been removed from ${context.subredditName}`,
-      text: `${removal_message} \n\n Post link: ${posToRemove.permalink}`,
-    });
-
-    if( notifyModeratorsOnRemoval ) {
-      const conversationId = await context.reddit.modMail.createModNotification({  
-        subject: 'post removal from Social-Blacklist',
-        bodyMarkdown: 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+author?.username+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason,
-        subredditId: context.subredditId,
+      const redditComment = await context.reddit.submitComment({
+        id: postToRemove.id,
+        text: `${removal_message}`,
       });
+
+      await redditComment.distinguish(true);
+
+      await context.reddit.sendPrivateMessage({
+        to: author?.username??"defaultUsernameXXX",
+        subject: `Your post '${postToRemove.title}' has been removed from ${context.subredditName}`,
+        text: `${removal_message} \n\n Post link: ${postToRemove.permalink}`,
+      });
+
+      if( notifyModeratorsOnRemoval ) {
+        const conversationId = await context.reddit.modMail.createModNotification({  
+          subject: 'post removal from Social-Blacklist',
+          bodyMarkdown: 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+author?.username+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason,
+          subredditId: context.subredditId,
+        });
+      }
+    }
+    catch (error) {
+      console.error('Failed to remove post:', error);
+      setTimeout(() => removePost(postToRemove, removalReason, context, retries - 1), 100);
     }
   }
 }

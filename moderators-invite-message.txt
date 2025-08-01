@@ -11,3 +11,8 @@ https://developers.reddit.com/apps/social-blacklist
 
  Hi mods,
 I noticed that you are using the Social-Blacklist app that I developed in your sub. I just wanted to let you know that there is presently some issue with the platform due to which it is not removing the posts that match the criteria. And due to this, it is trying to remove the same post again and again. I am following up with reddit team to have this addressed, and will inform you once it is working again.
+
+
+
+Hi moderators, 
+I noticed that this sub is presently using Social-Blacklist app. I am the author of this app, and I noticed that sometimes the posts are not removed. So I made some updates that might fix this problem. Can you please update the app to latest version(0.0.14)? You can update by going here: https://developers.reddit.com/r/style/apps
