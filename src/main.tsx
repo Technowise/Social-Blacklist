@@ -132,11 +132,12 @@ Devvit.addSettings([
     scope: SettingScope.Installation,
     helpText: "Provide a list of black-listed domains - For example: instagram.com, youtube.com",
     onValidate: ({ value }) => {
-      // Split the input and trim whitespace
+
       if (typeof value == "string") {
         if( value.length == 0 ) {
           return "This field is required";
         }
+        // Split the input and trim whitespace
         const domains = value.split(',').map((d) => d.trim());
         // Simple validation: check if each domain matches a basic pattern
         const domainPattern = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -152,7 +153,7 @@ Devvit.addSettings([
     type: 'string',
     name: 'removal-message',
     label: 'Message to user on removal of the post:',
-    defaultValue: "Your submission has been removed from this sub based on your profile information or posted content. Please review rules of the sub for further information on what is allowed/disallowed on this subreddit.",
+    defaultValue: "Your submission has been removed based on your profile information or posted content. Please review rules of the sub for further information on what is allowed/disallowed on this subreddit.",
     scope: SettingScope.Installation,
   },
   {
@@ -165,7 +166,7 @@ Devvit.addSettings([
   {
     type: 'boolean',
     name: 'removeDomainInPostLink',
-    label: 'Remove posts containing blacklisted domains in post link',
+    label: 'Remove posts containing blacklisted domains in post link.',
     scope: SettingScope.Installation, 
     defaultValue: false,
   },
@@ -236,7 +237,7 @@ Devvit.addTrigger({
     const author = await context.reddit.getUserById(event.post?.authorId??"defaultUsernameXXX");
     var authorUsername = author?.username??"nobody";
 
-    if( blacklisted_list && typeof blacklisted_list== "string" && author ) {
+    if( typeof blacklisted_list== "string" && author ) {
 
       const blacklisted_domains =blacklisted_list
       .split(',')
