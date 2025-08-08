@@ -7,6 +7,11 @@ Devvit.configure({redditAPI: true,
                   redis: true,
                   userActions: false });
 
+const redisExpireTimeSeconds = 2592000;//30 days in seconds.
+const redisExpireTimeMilliseconds = redisExpireTimeSeconds * 1000;
+const dateNow = new Date();
+const expireTime = new Date(dateNow.getTime() + redisExpireTimeMilliseconds);
+
 enum removalReasons {
   none = "None",
   blacklistedDomainInSocialLinks = "Blacklisted domain found in user's Social Links",
@@ -59,7 +64,7 @@ Devvit.addSchedulerJob({
     const blacklisted_list = settings['blacklisted-domains']??'';
     const removeDomainInSocialLinks = settings['removeDomainInSocialLinks'];
 
-    if( removeDomainInSocialLinks && typeof blacklisted_list== "string" ){
+    if( removeDomainInSocialLinks && typeof blacklisted_list == "string" ){
       const subreddit = await context.reddit.getCurrentSubreddit();
       const posts = await context.reddit
         .getNewPosts({
@@ -212,12 +217,19 @@ Devvit.addSettings([
     scope: SettingScope.Installation, 
     defaultValue: true,
   },
+   {
+    type: 'boolean',
+    name: 'ignoreApprovedUsers',
+    label: 'Ignore posts and comments by approved users of this subreddit.',
+    scope: SettingScope.Installation, 
+    defaultValue: true,
+  }, 
   {
     type: 'select',
     name: 'banAfterRemovals',
     label: 'Ban user after this many removals:',
     options: [
-              {'label': 'Disabled', value: '0'},
+              {'label': 'Disabled', value: 'Disabled'},
               {'label': '1', value: '1'},
               {'label': '2', value: '2'},
               {'label': '3', value: '3'},
@@ -229,8 +241,8 @@ Devvit.addSettings([
               {'label': '9', value: '9'},
               {'label': '10', value: '10'},
             ],
-    helpText: "Ban user after this many removals by Social-Blacklist app",
-    defaultValue: ['0'],
+    helpText: "If enabled (set to a certain number), the user will get a permanent-ban after the given number of removals made by Social-Blacklist app. ",
+    defaultValue: ['Disabled'],
   }
 
 ]);
@@ -246,6 +258,7 @@ Devvit.addTrigger({
     const removeDomainInPostLink = settings['removeDomainInPostLink'];
     const removeDomainInPostBody = settings['removeDomainInPostBody'];
     const removeDomainInProfileStickyPosts = settings['removeDomainInProfileStickyPosts'];
+
     var removalReason:removalReasons = removalReasons.none;
     const author = await context.reddit.getUserById(event.post?.authorId??"defaultUsernameXXX");
     var authorUsername = author?.username??"nobody";
@@ -325,12 +338,26 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
   const notifyModeratorsOnRemoval = settings['notifyModeratorsOnRemoval'];
   const author = await context.reddit.getUserById(postToRemove.authorId??"defaultUsernameXXX");
   const ignoreModerators = settings['ignoreModerators'];
+  const ignoreApprovedUsers = settings['ignoreApprovedUsers'];
   const subreddit = await context.reddit.getCurrentSubreddit();
+  const approvedUsers = await subreddit.getApprovedUsers().all();
+  const authorIsApproved = approvedUsers.some(user => user.username === author?.username);
+  const authorUsername = author?.username??"nobodygoesbythisname";
+  const banAfterRemovalsStr = settings['banAfterRemovals']?.toString();
+  
+  var banAfterRemovals = -1;
+  if( banAfterRemovalsStr &&  banAfterRemovalsStr != 'Disabled' ) {
+    banAfterRemovals = parseInt(banAfterRemovalsStr.toString());
+  }
+
+  if( ignoreApprovedUsers && authorIsApproved ) {
+    return;//Do not action anything if the user is an approved user.
+  }
 
   if( ignoreModerators ) {
     const moderators = await subreddit.getModerators().all();
     for (const mod of  moderators) {
-      if (mod.username === author?.username) {
+      if (mod.username === authorUsername) {
         return;//Do not action anything if the user is a moderator.
       }
     }
@@ -338,6 +365,7 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
 
   const post = await context.reddit.getPostById(postToRemove.id);
   if( post ) {
+
 
     try {
       await post.remove();
@@ -362,6 +390,31 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
           subredditId: context.subredditId,
         });
       }
+
+      var removalsCount = await context.redis.get(authorUsername+'RemovalsCount') ?? '0';
+      const newCount = parseInt(removalsCount) + 1;
+
+      if( banAfterRemovalsStr != 'Disabled' &&  newCount >= banAfterRemovals ) {
+  
+          await context.reddit.banUser({
+          subredditName: subreddit.name,
+          username: authorUsername,
+          duration: 0,
+          reason: 'Breaking subreddit rules',
+          note: 'User is banned after '+banAfterRemovals+' removals by Social-Blacklist app',
+          context: post.id, // Optional: ID of the post or comment
+          message: 'You have been banned for breaking the rules.'
+        });
+
+        const conversationId = await context.reddit.modMail.createModNotification({  
+          subject: 'User banned by Social-Blacklist',
+          bodyMarkdown: 'A user has been banned after '+banAfterRemovals+' removal(s) by Social-Blacklist app. \n\n Author: https://www.reddit.com/u/'+authorUsername+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink,
+          subredditId: context.subredditId,
+        });
+        
+      }
+
+      await context.redis.set(authorUsername+'RemovalsCount', newCount.toString(), {expiration: expireTime});
     }
     catch (error) {
       console.error('Failed to remove post:', error);
@@ -373,15 +426,23 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
 Devvit.addTrigger({
   event: 'CommentCreate',
   onEvent: async (event, context) => {
-    const blacklisted_domains_list = await context.settings.get('blacklisted-domains');
-    const ignoreModerators = await context.settings.get('ignoreModerators');
-    const notifyModeratorsOnRemoval = await context.settings.get('notifyModeratorsOnRemoval');
-    const removeDomainInComment = await context.settings.get('removeDomainInComment');
-    const removal_message = await context.settings.get('removal-message');
+    const settings = await context.settings.getAll();
+    const blacklisted_domains_list = settings['blacklisted-domains'];
+    const ignoreModerators = settings['ignoreModerators'];
+    const ignoreApprovedUsers = settings['ignoreApprovedUsers'];
+    const notifyModeratorsOnRemoval = settings['notifyModeratorsOnRemoval'];
+    const removeDomainInComment = settings['removeDomainInComment'];
+    const removal_message = settings['removal-message'];
     const subreddit = await context.reddit.getCurrentSubreddit();    
     const authorUsername = event.author?.name??"defaultUserName";
 
     if( removeDomainInComment && typeof blacklisted_domains_list == "string" ) {
+      const approvedUsers = await subreddit.getApprovedUsers().all();
+      const authorIsApproved = approvedUsers.some(user => user.username === authorUsername);
+
+      if( ignoreApprovedUsers && authorIsApproved ) {
+        return;//Do not action anything if the user is an approved user.
+      }
 
       if( ignoreModerators ) {
         const moderators = await subreddit.getModerators().all();

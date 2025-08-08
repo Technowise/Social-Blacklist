@@ -6,7 +6,7 @@ A reddit mod tool to automate removal of posts based on the configured blacklist
  * Post Comment
  * Profile Sticky Post
  
- This would be helpful to communities where spamming is common by users/bots with a goal to attract visitors to their sites/pages for commercial gain(like platforms for selling content, or get PPV etc.). After installing the app, go to App Installation Settings and configure the domains and removal message as per your requirement, and enable/disable flags on what/where to look for these domains for removal. This can also optionally remove all posts by users having NSFW profile. To know if the app is removing the posts accordingly, you can enable mod-mail notification on removal through the settings OR review your mod-log for actions made by /u/social-blacklist.
+ This is helpful to communities where spamming is common by users/bots with a goal to attract visitors to their sites/pages for commercial gain(like platforms for selling content, or get PPV etc.). After installing the app, go to App Installation Settings and configure the domains and removal message as per your requirement, and enable/disable settings as per your subreddit requirements. You can also configure this to ban the users after a given number of removals, and to remove posts by users having NSFW profile. To know if the app is removing the posts accordingly, you can enable mod-mail notification on removal through the settings OR review your mod-log for actions made by /u/social-blacklist.
 
 ![Screenshot of settings available](https://i.redd.it/l2t7vak8sddf1.png)
 
@@ -15,6 +15,7 @@ While Automoderator can also do most of the these things, Automoderator rules ca
 1. Check the `Social Links` of the user.
 2. Check if the user is having a NSFW profile.
 3. Check profile sticky post of the user.
+4. Keep count of rule violations/removals before banning the users.
 
 Also, this tool can come handy for those who are not comfortable/tech-savvy with setting up Automoderator rules themselves.
 
@@ -33,6 +34,8 @@ The settings page provides the following settings:
   8) Flag to remove posts made by users having NSFW profiles.
   9) Flag to send mod-mail notification on removal.
   10) Flag to ignore posts by moderators of the subreddit.
+  11) Flag to ignore posts by approved users of the subreddit.
+  12) Drop-down for optionally ban users after given number of removals. 
 
 ## Changelog
 * 0.0.2
@@ -62,3 +65,7 @@ The settings page provides the following settings:
     * Add check on post object to be valid before calling the remove method(to fix an issue in removing posts that happens intermittently).
 * 0.0.15
     * Improvement: Add try-catch block to re-try removing post if it fails at removing on the first go.
+* 0.0.16
+    * Add option to ignore posts/comments made by approved users of the subreddit.
+* 0.0.17
+    * Add option to ban user after given number of removals.
