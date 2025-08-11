@@ -1,9 +1,9 @@
-*** Keep count of removals in redis, then ban user after X number of removals. *** 
 Add flag in settings to remove posts if user has blacklisted domainsin their recent comments or recent posts.
-Store mod comment-id in redis, and do not add new comment if it already exists.
- 
+
+Store mod comment-id in redis, and do not add new comment if it already exists. - Done 
 Add flag to remove comments that contain blacklisted domains.  - Done.
 Add flag in settings to remove posts if the user has stickied post that contain blacklisted domains. - Done
 Add flag to optionally run scheduled job to check the 'New' feed. - Done
 Add flag in settings to remove posts from NSFW profiles. - Done.
 Add flag to send mod-mail on removal of posts. - Done
+*** Keep count of removals in redis, then ban user after X number of removals. *** - Done.

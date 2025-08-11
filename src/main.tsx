@@ -370,12 +370,18 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
     try {
       await post.remove();
 
-      const redditComment = await context.reddit.submitComment({
-        id: postToRemove.id,
-        text: `${removal_message}`,
-      });
+      const prevCommentId = await context.redis.get(post.id + subreddit.name + "CommentId");
+      if( prevCommentId == null ) {//Add comment if not done already.
+        const redditComment = await context.reddit.submitComment({
+          id: postToRemove.id,
+          text: `${removal_message}`,
+        });
 
-      await redditComment.distinguish(true);
+        if( redditComment ) {
+          await redditComment.distinguish(true);
+          context.redis.set(post.id + subreddit.name + "CommentId", redditComment.id );
+        }
+      }
 
       await context.reddit.sendPrivateMessage({
         to: author?.username??"defaultUsernameXXX",

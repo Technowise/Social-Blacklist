@@ -35,7 +35,7 @@ The settings page provides the following settings:
   9) Flag to send mod-mail notification on removal.
   10) Flag to ignore posts by moderators of the subreddit.
   11) Flag to ignore posts by approved users of the subreddit.
-  12) Drop-down for optionally ban users after given number of removals. 
+  12) Drop-down for optionally ban users after given number of removals.
 
 ## Changelog
 * 0.0.2
@@ -69,3 +69,5 @@ The settings page provides the following settings:
     * Add option to ignore posts/comments made by approved users of the subreddit.
 * 0.0.17
     * Add option to ban user after given number of removals.
+* 0.0.18
+    * Improvement: Prevent repeatition of removal messages in comments.
