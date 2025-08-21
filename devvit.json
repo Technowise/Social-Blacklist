@@ -1,5 +1,5 @@
 {
-  "name": "Social-Blacklist",
+  "name": "social-blacklist",
   "blocks": {
     "entry": "src/main.tsx"
   }
