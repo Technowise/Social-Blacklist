@@ -8,7 +8,7 @@ A reddit mod tool to automate removal of posts based on the configured blacklist
  
  This is helpful to communities where spamming is common by users/bots with a goal to attract visitors to their sites/pages for commercial gain(like platforms for selling content, or get PPV etc.). After installing the app, go to App Installation Settings and configure the domains and removal message as per your requirement, and enable/disable settings as per your subreddit requirements. You can also configure this to ban the users after a given number of removals, and to remove posts by users having NSFW profile. To know if the app is removing the posts accordingly, you can enable mod-mail notification on removal through the settings OR review your mod-log for actions made by /u/social-blacklist.
 
-![Screenshot of settings available](https://i.redd.it/l2t7vak8sddf1.png)
+![Screenshot of settings available](https://i.redd.it/q85m7pusbbkf1.png)
 
 #### What can this tool do that Automoderator can't?
 While Automoderator can also do most of the these things, Automoderator rules can't:
@@ -71,3 +71,6 @@ The settings page provides the following settings:
     * Add option to ban user after given number of removals.
 * 0.0.18
     * Improvement: Prevent repeatition of removal messages in comments.
+* 0.0.19
+    * Improvement: Retry-sending mod-mail if it fails on first go.
+    * Update devvit public-api to 0.12.0

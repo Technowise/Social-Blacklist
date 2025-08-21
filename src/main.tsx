@@ -390,11 +390,9 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
       });
 
       if( notifyModeratorsOnRemoval ) {
-        const conversationId = await context.reddit.modMail.createModNotification({  
-          subject: 'post removal from Social-Blacklist',
-          bodyMarkdown: 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+author?.username+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason,
-          subredditId: context.subredditId,
-        });
+        const modmailSubject = 'post removal from Social-Blacklist';
+        const modmailBody = 'A post has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+author?.username+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink+'  \n\n Removal reason: '+removalReason;
+        sendModmail(modmailSubject, modmailBody, context, 5);
       }
 
       var removalsCount = await context.redis.get(authorUsername+'RemovalsCount') ?? '0';
@@ -412,12 +410,9 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
           message: 'You have been banned for breaking the rules.'
         });
 
-        const conversationId = await context.reddit.modMail.createModNotification({  
-          subject: 'User banned by Social-Blacklist',
-          bodyMarkdown: 'A user has been banned after '+banAfterRemovals+' removal(s) by Social-Blacklist app. \n\n Author: https://www.reddit.com/u/'+authorUsername+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink,
-          subredditId: context.subredditId,
-        });
-        
+        const modmailSubject = 'User banned by Social-Blacklist';
+        const modmailBody = 'A user has been banned after '+banAfterRemovals+' removal(s) by Social-Blacklist app. \n\n Author: https://www.reddit.com/u/'+authorUsername+'  \n\n Post title: '+post.title+' \n\n Post link: '+post.permalink;
+        sendModmail(modmailSubject, modmailBody, context, 5);
       }
 
       await context.redis.set(authorUsername+'RemovalsCount', newCount.toString(), {expiration: expireTime});
@@ -426,6 +421,21 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
       console.error('Failed to remove post:', error);
       setTimeout(() => removePost(postToRemove, removalReason, context, retries - 1), 100);
     }
+  }
+}
+
+async function sendModmail(subject:string, body:string,context: TriggerContext | JobContext, retries: number) {
+  if (retries <= 0) return;
+  try {
+    const conversationId = await context.reddit.modMail.createModNotification({  
+      subject: subject,
+      bodyMarkdown: body,
+      subredditId: context.subredditId,
+    });
+  }
+  catch (error) {
+    console.error('Failed to send modmail:', error);
+    setTimeout(() => sendModmail(subject, body, context, retries - 1), 100);
   }
 }
 
@@ -476,11 +486,9 @@ Devvit.addTrigger({
         });
 
         if( notifyModeratorsOnRemoval ) {
-          const conversationId = await context.reddit.modMail.createModNotification({  
-            subject: 'comment removal from Social-Blacklist',
-            bodyMarkdown: 'A comment has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+ authorUsername+'  \n\n Comment text: '+event.comment?.body+' \n\n Comment link: '+event.comment?.permalink+'  \n\n Removal reason: '+removalReasons.blacklistedDomainInComment,
-            subredditId: context.subredditId,
-          });
+          const modmailSubject = 'comment removal from Social-Blacklist';
+          const modmailBody = 'A comment has been removed by Social-Blacklist. \n\n Author: https://www.reddit.com/u/'+ authorUsername+'  \n\n Comment text: '+event.comment?.body+' \n\n Comment link: '+event.comment?.permalink+'  \n\n Removal reason: '+removalReasons.blacklistedDomainInComment;
+          sendModmail(modmailSubject, modmailBody, context, 5);
         }
       }
     }
