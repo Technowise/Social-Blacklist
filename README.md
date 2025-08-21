@@ -74,3 +74,5 @@ The settings page provides the following settings:
 * 0.0.19
     * Improvement: Retry-sending mod-mail if it fails on first go.
     * Update devvit public-api to 0.12.0
+* 0.0.20
+    * Add devvit.json as per migration guide for devvit public-api to 0.12.0

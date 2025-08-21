@@ -1,0 +1,6 @@
+{
+  "name": "Social-Blacklist",
+  "blocks": {
+    "entry": "src/main.tsx"
+  }
+}

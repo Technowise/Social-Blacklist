@@ -369,7 +369,6 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
 
     try {
       await post.remove();
-
       const prevCommentId = await context.redis.get(post.id + subreddit.name + "CommentId");
       if( prevCommentId == null ) {//Add comment if not done already.
         const redditComment = await context.reddit.submitComment({
