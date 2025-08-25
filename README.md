@@ -76,3 +76,5 @@ The settings page provides the following settings:
     * Update devvit public-api to 0.12.0
 * 0.0.20
     * Add devvit.json as per migration guide for devvit public-api to 0.12.0
+* 0.0.21
+    * Using scheduled job for scanning through posts (instead of trigger, as 0.12.0 upgrade broke trigger functionality)

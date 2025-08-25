@@ -15,9 +15,9 @@ const expireTime = new Date(dateNow.getTime() + redisExpireTimeMilliseconds);
 enum removalReasons {
   none = "None",
   blacklistedDomainInSocialLinks = "Blacklisted domain found in user's Social Links",
-  blacklistedDomainInStickyPost = "Blacklisteddomain found in user's Sticky post",
-  blacklistedDomainInPostLink = "Blacklisteddomain found in post link",
-  blacklistedDomainInPostBody = "Blacklisteddomain found in post body/content",
+  blacklistedDomainInStickyPost = "Blacklisted domain found in user's Sticky post",
+  blacklistedDomainInPostLink = "Blacklisted domain found in post link",
+  blacklistedDomainInPostBody = "Blacklisted domain found in post body/content",
   blacklistedDomainInRecentComments= "Blacklisted domain found in user's Recent comments",
   blacklistedDomainInComment = "Blacklisted domain found in user's comment",
   blacklistedDomainInUserStickyPost = "Blacklisted domain found in user's sticky post",
@@ -49,9 +49,9 @@ async function addScheduledJob(context:TriggerContext) {
   }
   console.log("Adding a new scheduled job for scheduled feed checking.");
   const jobId = await context.scheduler.runJob({
-  name: 'check-feeds',
-  //cron: '* * * * *', //Runs every minute - Only use this for testing.
-  cron: '*/10 * * * *', //Runs 10 mins once.
+    name: 'check-feeds',
+    //cron: '* * * * *', //Runs every minute - Only use this for testing.
+    cron: '*/5 * * * *', //Runs 5 mins once.
   });
   await context.redis.set('ScheduledJobId', jobId);
 }
@@ -59,40 +59,19 @@ async function addScheduledJob(context:TriggerContext) {
 Devvit.addSchedulerJob({
   name: 'check-feeds',  
   onRun: async(event, context) => {
-
-    const settings = await context.settings.getAll();
-    const blacklisted_list = settings['blacklisted-domains']??'';
-    const removeDomainInSocialLinks = settings['removeDomainInSocialLinks'];
-
-    if( removeDomainInSocialLinks && typeof blacklisted_list == "string" ){
-      const subreddit = await context.reddit.getCurrentSubreddit();
-      const posts = await context.reddit
-        .getNewPosts({
-          subredditName: subreddit.name,
-          limit: 30,
-          pageSize: 1,
-        })
-        .all();
-
-      const blacklisted_domains = blacklisted_list
-          .split(',')
-          .map((d) => d.trim().toLowerCase())
-          .filter(Boolean);
-
-      for( var i=0; i< posts.length; i++ ) {
-        const author = await context.reddit.getUserByUsername(posts[i].authorName);        
-        if( author && ! posts[i].isApproved() && ! posts[i].isRemoved()  ) {
-          const socialLinks = await author.getSocialLinks();
- 
-          // Check if any social link matches a blacklisted domain
-          const blacklistedDomainFoundInSocialLinks = socialLinks?.some(link =>
-            blacklisted_domains.some(domain => link.outboundUrl.toLowerCase().includes(domain))
-          );
-
-          if( blacklistedDomainFoundInSocialLinks ) {
-            await removePost(posts[i], removalReasons.blacklistedDomainInSocialLinks, context, 6);
-          }
-        }
+    //console.log("Running posts scan in scheduled job");
+    const subreddit = await context.reddit.getCurrentSubreddit();
+    const posts = await context.reddit
+      .getNewPosts({
+        subredditName: subreddit.name,
+        limit: 40,
+        pageSize: 1,
+      })
+      .all();
+    
+    for( var i=0; i< posts.length; i++ ) {
+      if( ! posts[i].isRemoved() ) {
+        scanAndRemovePost(context, posts[i])
       }
     }
   },
@@ -250,7 +229,14 @@ Devvit.addSettings([
 Devvit.addTrigger({
   event: 'PostSubmit',
   onEvent: async (event, context) => {
+    if( event.post!= undefined ) {
+      scanAndRemovePost(context, event.post)
+    }
+  },
+});
 
+async function scanAndRemovePost( context: TriggerContext | JobContext, post:PostV2 | Post) {
+{
     const settings = await context.settings.getAll();
     const blacklisted_list = settings['blacklisted-domains'];
     const removeDomainInSocialLinks = settings['removeDomainInSocialLinks'];
@@ -260,7 +246,7 @@ Devvit.addTrigger({
     const removeDomainInProfileStickyPosts = settings['removeDomainInProfileStickyPosts'];
 
     var removalReason:removalReasons = removalReasons.none;
-    const author = await context.reddit.getUserById(event.post?.authorId??"defaultUsernameXXX");
+    const author = await context.reddit.getUserById(post?.authorId??"defaultUsernameXXX");
     var authorUsername = author?.username??"nobody";
 
     if( typeof blacklisted_list== "string" && author ) {
@@ -270,49 +256,52 @@ Devvit.addTrigger({
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean);
   
-      if( event.post!= undefined ) {
+      const socialLinks = await author.getSocialLinks();
 
-        const socialLinks = await author.getSocialLinks();
+      // Check if any social link matches a blacklisted domain
+      const blacklistedDomainFoundInSocialLinks = socialLinks?.some(link =>
+        blacklisted_domains.some(domain => link.outboundUrl.toLowerCase().includes(domain))
+      );
 
-        // Check if any social link matches a blacklisted domain
-        const blacklistedDomainFoundInSocialLinks = socialLinks?.some(link =>
-          blacklisted_domains.some(domain => link.outboundUrl.toLowerCase().includes(domain))
-        );
+      const blacklistedDomainFoundInPostLink = blacklisted_domains.some(domain => post?.url.toLowerCase().includes(domain));
 
-        const blacklistedDomainFoundInPostLink = blacklisted_domains.some(domain => event.post?.url.toLowerCase().includes(domain));
-        const blacklistedDomainFoundInPostBody = blacklisted_domains.some(domain => event.post?.selftext.toLowerCase().includes(domain));
+      var blacklistedDomainFoundInPostBody = false;
+      var blacklistedDomainFoundInProfileStickyPosts = false;
+      if( post instanceof Post ) {
+        blacklistedDomainFoundInPostBody = blacklisted_domains.some(domain => post?.body?.toLowerCase().includes(domain));
+      }
+      else{
+        blacklistedDomainFoundInPostBody = blacklisted_domains.some(domain => post?.selftext.toLowerCase().includes(domain));
+      } 
 
-        var blacklistedDomainFoundInProfileStickyPosts = false;
+      if( removeDomainInProfileStickyPosts ) {
+        blacklistedDomainFoundInProfileStickyPosts = await findBlacklistedDomainsInStickyPosts(author, blacklisted_domains, context);
+      }
 
-        if( removeDomainInProfileStickyPosts ) {
-          blacklistedDomainFoundInProfileStickyPosts = await findBlacklistedDomainsInStickyPosts(author, blacklisted_domains, context);
-        }
+      const rawUserData = await getRawUserData(authorUsername, context.debug.metadata);
 
-        const rawUserData = await getRawUserData(authorUsername, context.debug.metadata);
+      if (removeDomainInSocialLinks && blacklistedDomainFoundInSocialLinks) {
+        removalReason = removalReasons.blacklistedDomainInSocialLinks;
+      }
+      else if( removeDomainInPostLink && blacklistedDomainFoundInPostLink ){
+        removalReason = removalReasons.blacklistedDomainInPostLink;
+      }
+      else if( removeDomainInPostBody && blacklistedDomainFoundInPostBody ){
+        removalReason = removalReasons.blacklistedDomainInPostBody;
+      }
+      else if ( removeNSFWProfilePosts && rawUserData?.data && rawUserData.data.subreddit?.over18) {
+        removalReason = removalReasons.NSFWProfile;
+      }
+      else if ( blacklistedDomainFoundInProfileStickyPosts ) {
+        removalReason = removalReasons.blacklistedDomainInUserStickyPost;
+      }
 
-        if (removeDomainInSocialLinks && blacklistedDomainFoundInSocialLinks) {
-          removalReason = removalReasons.blacklistedDomainInSocialLinks;
-        }
-        else if( removeDomainInPostLink && blacklistedDomainFoundInPostLink ){
-          removalReason = removalReasons.blacklistedDomainInPostLink;
-        }
-        else if( removeDomainInPostBody && blacklistedDomainFoundInPostBody ){
-          removalReason = removalReasons.blacklistedDomainInPostBody;
-        }
-        else if ( removeNSFWProfilePosts && rawUserData?.data && rawUserData.data.subreddit?.over18) {
-          removalReason = removalReasons.NSFWProfile;
-        }
-        else if ( blacklistedDomainFoundInProfileStickyPosts ) {
-          removalReason = removalReasons.blacklistedDomainInUserStickyPost;
-        }
-
-        if( removalReason != removalReasons.none ) {
-          await removePost(event.post, removalReason, context, 6);
-        }
+      if( removalReason != removalReasons.none ) {
+        await removePost(post, removalReason, context, 6);
       }
     }
-  },
-});
+  }
+}
 
 async function findBlacklistedDomainsInStickyPosts(author:User, blacklisted_domains: string[], context: TriggerContext | JobContext) {
   const posts =  await author.getPosts({ limit: 20, timeframe:"all"}).all();
@@ -365,8 +354,6 @@ async function removePost(postToRemove:PostV2 | Post,  removalReason:removalReas
 
   const post = await context.reddit.getPostById(postToRemove.id);
   if( post ) {
-
-
     try {
       await post.remove();
       const prevCommentId = await context.redis.get(post.id + subreddit.name + "CommentId");
