@@ -2,5 +2,20 @@
   "name": "social-blacklist",
   "blocks": {
     "entry": "src/main.tsx"
+  },
+  "server": {
+    "entry": "src/server/index.js"
+  }, 
+  "triggers": {
+    "onPostSubmit": "/internal/on-post-submit"
+  },
+  "dev": {
+    "subreddit": "redditDevTest"
+  },
+  "permissions": {
+    "redis": true,
+    "reddit": {
+      "enable": true
+    }
   }
 }
